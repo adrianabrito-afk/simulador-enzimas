@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Atividade Enzimática</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 32px;
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            color: #1f2937;
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #6b7280;
+            margin-bottom: 24px;
+        }
+        .ph-slider-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .ph-label {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #4b5563;
+        }
+        .ph-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #10b981;
+            width: 50px;
+            text-align: center;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 250px;
+            height: 8px;
+            background: #d1d5db;
+            border-radius: 5px;
+            outline: none;
+            transition: background 0.2s;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            background: #10b981;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            background: #10b981;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .simulation-area {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background-color: #ecf0f1;
+            border-radius: 12px;
+            border: 2px solid #bdc3c7;
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+        .enzyme, .substrate {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            transition: transform 0.5s ease-out;
+        }
+        .enzyme {
+            background-color: #3498db;
+            border: 2px solid #2980b9;
+        }
+        .substrate {
+            background-color: #e67e22;
+            border: 2px solid #d35400;
+        }
+        .product {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background-color: #2ecc71;
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        .animation-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center p-4 min-h-screen">
+    <div class="container mx-auto p-8 bg-white rounded-xl shadow-lg">
+        <h1 class="text-4xl font-bold text-gray-800">Simulador de Atividade Enzimática</h1>
+        <p class="subtitle text-lg text-gray-600">Explore como o pH afeta a função de uma enzima.</p>
+        
+        <div class="ph-slider-container">
+            <label for="phSlider" class="ph-label">pH:</label>
+            <input type="range" id="phSlider" min="1" max="14" value="7">
+            <span id="phValue" class="ph-value">7.0</span>
+        </div>
+        
+        <div class="simulation-area">
+            <div id="animation-container" class="animation-container"></div>
+        </div>
+        
+        <div class="flex flex-col items-center justify-center space-y-2 text-gray-700">
+            <p><span class="inline-block w-4 h-4 rounded-full bg-blue-500 mr-2"></span>Enzima</p>
+            <p><span class="inline-block w-4 h-4 rounded-full bg-orange-600 mr-2"></span>Substrato</p>
+            <p><span class="inline-block w-4 h-4 rounded-full bg-green-500 mr-2"></span>Produto</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const phSlider = document.getElementById('phSlider');
+            const phValueSpan = document.getElementById('phValue');
+            const animationContainer = document.getElementById('animation-container');
+            
+            const numEnzymes = 5;
+            const numSubstrates = 20;
+            let enzymes = [];
+            let substrates = [];
+            let phOptimal = 7.0; // pH ótimo da enzima simulada
+            let phValue = phSlider.value;
+            let animationFrameId;
+
+            const createParticle = (className, x, y) => {
+                const particle = document.createElement('div');
+                particle.className = className;
+                particle.style.left = `${x}px`;
+                particle.style.top = `${y}px`;
+                animationContainer.appendChild(particle);
+                return particle;
+            };
+
+            const getRandomPosition = () => ({
+                x: Math.random() * (animationContainer.offsetWidth - 30),
+                y: Math.random() * (animationContainer.offsetHeight - 30)
+            });
+
+            const getVelocity = () => ({
+                dx: (Math.random() - 0.5) * 2,
+                dy: (Math.random() - 0.5) * 2
+            });
+
+            const initializeSimulation = () => {
+                animationContainer.innerHTML = '';
+                enzymes = [];
+                substrates = [];
+
+                for (let i = 0; i < numEnzymes; i++) {
+                    const pos = getRandomPosition();
+                    const enzyme = createParticle('enzyme', pos.x, pos.y);
+                    enzymes.push({
+                        element: enzyme,
+                        x: pos.x,
+                        y: pos.y,
+                        ...getVelocity(),
+                        isDenatured: false,
+                        denatureOffset: 0
+                    });
+                }
+
+                for (let i = 0; i < numSubstrates; i++) {
+                    const pos = getRandomPosition();
+                    const substrate = createParticle('substrate', pos.x, pos.y);
+                    substrates.push({
+                        element: substrate,
+                        x: pos.x,
+                        y: pos.y,
+                        ...getVelocity(),
+                        isActive: true
+                    });
+                }
+            };
+
+            const update = () => {
+                const phDifference = Math.abs(phValue - phOptimal);
+                const denaturationFactor = Math.min(1, phDifference / 5);
+
+                enzymes.forEach(e => {
+                    const denatureOffset = denaturationFactor * (Math.random() - 0.5) * 20;
+                    e.element.style.transform = `scale(${1 - denaturationFactor * 0.5}) rotate(${denatureOffset * 2}deg)`;
+                    e.isDenatured = denaturationFactor > 0.5;
+
+                    if (e.isDenatured) {
+                        e.element.style.backgroundColor = '#95a5a6';
+                        e.element.style.borderColor = '#7f8c8d';
+                    } else {
+                        e.element.style.backgroundColor = '#3498db';
+                        e.element.style.borderColor = '#2980b9';
+                    }
+
+                    e.x += e.dx;
+                    e.y += e.dy;
+
+                    if (e.x + 30 > animationContainer.offsetWidth || e.x < 0) e.dx *= -1;
+                    if (e.y + 30 > animationContainer.offsetHeight || e.y < 0) e.dy *= -1;
+
+                    e.element.style.left = `${e.x}px`;
+                    e.element.style.top = `${e.y}px`;
+                });
+
+                substrates.forEach(s => {
+                    s.x += s.dx;
+                    s.y += s.dy;
+
+                    if (s.x + 30 > animationContainer.offsetWidth || s.x < 0) s.dx *= -1;
+                    if (s.y + 30 > animationContainer.offsetHeight || s.y < 0) s.dy *= -1;
+
+                    s.element.style.left = `${s.x}px`;
+                    s.element.style.top = `${s.y}px`;
+                });
+
+                // Check for collisions and reaction
+                substrates.forEach(s => {
+                    if (s.isActive) {
+                        enzymes.forEach(e => {
+                            if (!e.isDenatured) {
+                                const distance = Math.sqrt(Math.pow(e.x - s.x, 2) + Math.pow(e.y - s.y, 2));
+                                if (distance < 20) {
+                                    s.isActive = false;
+                                    s.element.style.opacity = '0';
+                                    
+                                    const product = createParticle('product', (e.x + s.x) / 2, (e.y + s.y) / 2);
+                                    product.style.opacity = '1';
+                                    setTimeout(() => {
+                                        product.style.opacity = '0';
+                                        product.remove();
+                                    }, 1000);
+                                    
+                                    setTimeout(() => {
+                                        s.element.style.opacity = '1';
+                                        s.isActive = true;
+                                        const newPos = getRandomPosition();
+                                        s.x = newPos.x;
+                                        s.y = newPos.y;
+                                        s.dx = (Math.random() - 0.5) * 2;
+                                        s.dy = (Math.random() - 0.5) * 2;
+                                    }, 1500);
+                                }
+                            }
+                        });
+                    }
+                });
+            };
+
+            const animate = () => {
+                update();
+                animationFrameId = requestAnimationFrame(animate);
+            };
+
+            phSlider.addEventListener('input', (e) => {
+                phValue = parseFloat(e.target.value);
+                phValueSpan.textContent = phValue.toFixed(1);
+            });
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                cancelAnimationFrame(animationFrameId);
+                initializeSimulation();
+                animate();
+            });
+
+            initializeSimulation();
+            animate();
+        });
+    </script>
+</body>
+</html>
